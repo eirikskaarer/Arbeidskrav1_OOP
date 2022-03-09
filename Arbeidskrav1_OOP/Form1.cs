@@ -12,6 +12,7 @@ using Microsoft.VisualBasic;
 using System.IO;
 using System.Windows.Forms.DataVisualization.Charting;
 using System.Globalization;
+using System.Threading;
 
 namespace Arbeidskrav1_OOP
 {
@@ -46,12 +47,17 @@ namespace Arbeidskrav1_OOP
 
         private void ScaledTimer_Tick(object sender, EventArgs e)
         {
-            serialPort1.WriteLine("readscaled"); 
+            serialPort1.WriteLine("readscaled");
+            Thread.Sleep(500);
+            getStatus();
         }
 
         private void RawTimer_Tick(object sender, EventArgs e)
         {
             serialPort1.WriteLine("readraw");
+            serialPort1.WriteLine("readscaled");
+            Thread.Sleep(500);
+            getStatus();
         }
 
         void DataRecievedHandler(object sender, SerialDataReceivedEventArgs e)
@@ -65,7 +71,28 @@ namespace Arbeidskrav1_OOP
             string[] separateParts = RecievedData.Split(';');
             textBox1.Invoke((MethodInvoker)delegate { textBox1.AppendText(separateParts[1] + "\r\n"); });
 
-
+            if (separateParts[0] == "readstatus")
+            {
+                AlarmStatusLbl.Invoke((MethodInvoker)delegate
+                {
+                    if (separateParts[1].Trim() == "0")
+                    {
+                        AlarmStatusLbl.Text = "Ok";
+                    }
+                    if (separateParts[1].Trim() == "1")
+                    {
+                        AlarmStatusLbl.Text = "fail";
+                    }
+                    if (separateParts[1].Trim() == "2")
+                    {
+                        AlarmStatusLbl.Text = "Alarm lower";
+                    }
+                    if (separateParts[1].Trim() == "3")
+                    {
+                        AlarmStatusLbl.Text = "Alarm Upper";
+                    }
+                });
+            }
             if (separateParts[0] == "readraw")
             {
                 MonitorList.Invoke((MethodInvoker)delegate
@@ -84,9 +111,9 @@ namespace Arbeidskrav1_OOP
                         MessageBox.Show("Not working, check status !");
                     }
                 });
-
+                getStatus();
             }
-
+            //Read scaled
             if (separateParts[0] == "readscaled")
             {
                 MonitorList.Invoke((MethodInvoker)delegate
@@ -95,11 +122,16 @@ namespace Arbeidskrav1_OOP
                     {
                         MonitorList.Items.Add("ScaleData" + "," + DateTime.Now.ToString("HH:mm:ss") + "," + recievedData[1] + "\n");
                         scaledReading.Add(iVab_float);
-                        timeStampScaled.Add(DateTime.Now);
-                        Chart.Series["Vba"].Points.DataBindXY(timeStampScaled, scaledReading);
+                        //DateTime now = DateTime.Now;
+                        //string formattedTime = now.Hour + ":" + now.Minute + ":" + now.Second;
+                        //DateTime convert = Convert.ToDateTime(formattedTime);
+                        timeStamp.Add(DateTime.Now);
+                        //timeStampScaled.Add(convert);
+                        Chart.Series["Vba"].Points.DataBindXY(timeStamp, scaledReading);
                         Chart.Invalidate();
                     }
                 });
+                getStatus();
             }
             
             if (recievedData[0] == "readconf")
@@ -182,6 +214,14 @@ namespace Arbeidskrav1_OOP
             textBoxIndicator1.BackColor = Color.Red;
         } // Disconecter arduino fra programmet
 
+        private void getStatus()
+        {
+            if (serialPort1.IsOpen)
+            {
+                serialPort1.WriteLine("readstatus");
+            }
+        }
+
         private void StatusTimer_Tick(object sender, EventArgs e)  // Timer for som sjekker tilkoblingsstatus
         {
             if (serialPort1.IsOpen)
@@ -233,7 +273,7 @@ namespace Arbeidskrav1_OOP
         {
             return int.Parse(textBoxAlarmLower.Text);
         }
-
+        
         private string ValidateText(string n, float lv, float uv, int al, int au) //Denne validerer teksten slik at 
         {
             if (n.Length == 0 || n.Length < 10 || n.Length > 10)
