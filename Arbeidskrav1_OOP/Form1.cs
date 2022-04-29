@@ -13,11 +13,19 @@ using System.IO;
 using System.Windows.Forms.DataVisualization.Charting;
 using System.Globalization;
 using System.Threading;
+using System.Data.SqlClient;
+using System.Configuration;
+using System.Reflection;
+
 
 namespace Arbeidskrav1_OOP
 {
+
     public partial class Form1 : Form
+
     {
+        string con = ConfigurationManager.ConnectionStrings["DatabaseOOP"].ConnectionString;
+
         List<int> analogReading = new List<int>();
         List<DateTime> timeStamp = new List<DateTime>();
 
@@ -26,6 +34,10 @@ namespace Arbeidskrav1_OOP
 
         public Form1()
         {
+            MessageBoxManager.Yes = "Database";
+            MessageBoxManager.No = "File";
+            MessageBoxManager.Register();
+
             InitializeComponent();
             comboBoxPort.Items.AddRange(SerialPort.GetPortNames());
             comboBoxPort.Text = "--Select--";
@@ -43,6 +55,22 @@ namespace Arbeidskrav1_OOP
 
             ScaledTimer.Interval = 5000;
             ScaledTimer.Tick += new EventHandler(ScaledTimer_Tick);
+
+            ImportToComboBox();
+        }
+        void ImportToComboBox()
+        {
+            SqlConnection connect = new SqlConnection(con);
+            string sqlQuery = "SELECT RDC_ID FROM RDC ORDER BY RDC_ID ASC";
+            SqlCommand sql = new SqlCommand(sqlQuery, connect);
+            connect.Open();
+            SqlDataReader dr = sql.ExecuteReader();
+            while (dr.Read() == true)
+            {
+                sqlQuery = dr[0].ToString();
+                StartscreenCheckbox.Items.Add(sqlQuery);
+            }
+            connect.Close();
         }
 
         private void ScaledTimer_Tick(object sender, EventArgs e)
@@ -64,7 +92,7 @@ namespace Arbeidskrav1_OOP
         {
             int iVab;
             float iVab_float;
-         
+
 
             string RecievedData = ((SerialPort)sender).ReadLine();
             string[] recievedData = RecievedData.Split(';'); //denne må muligens endres?
@@ -133,7 +161,7 @@ namespace Arbeidskrav1_OOP
                 });
                 getStatus();
             }
-            
+
             if (recievedData[0] == "readconf")
             {
                 SerialStatusTextBox.Invoke((MethodInvoker)delegate
@@ -150,7 +178,7 @@ namespace Arbeidskrav1_OOP
             {
                 SerialStatusTextBox.Invoke((MethodInvoker)delegate
                 {
-                    if (RecievedData == "writeconf;0")  
+                    if (RecievedData == "writeconf;0")
                     {
                         MessageBox.Show("Wrong Password! Try again");
                     }
@@ -173,9 +201,8 @@ namespace Arbeidskrav1_OOP
                 serialPort1.Open();
                 MessageBox.Show("Connection established to " + comboBoxPort.Text);
 
-                textBoxConStatInstrument.Clear();
-                textBoxConStatInstrument.AppendText(" Connected ");
                 textBoxIndicator1.BackColor = Color.Green; // grønn farge på indicator når den er connected
+
             }
             catch (Exception ex)
             {
@@ -185,7 +212,7 @@ namespace Arbeidskrav1_OOP
                     StatusTimer.Stop();
                     SerialStatusTextBox.Clear();
                     MessageBox.Show("Cannot Connect! Port might be in use ");
-                    SerialStatusTextBox.AppendText("Cant Connect!");
+                    SerialStatusTextBox.AppendText("Can not Connect!");
                     textBoxIndicator1.BackColor = Color.Red;
                 }
                 else if (ex is UnauthorizedAccessException)
@@ -208,9 +235,8 @@ namespace Arbeidskrav1_OOP
             serialPort1.Close();
             StatusTimer.Stop();
             MessageBox.Show(" Disconnected from " + comboBoxPort.Text);
-            SerialStatusTextBox.Clear(); //Legg til clear på resten av tabs!!
+            SerialStatusTextBox.Clear(); 
             SerialStatusTextBox.AppendText("Disconnected");
-            textBoxConStatInstrument.AppendText("Disconnected");
             textBoxIndicator1.BackColor = Color.Red;
         } // Disconecter arduino fra programmet
 
@@ -230,12 +256,6 @@ namespace Arbeidskrav1_OOP
                 SerialStatusTextBox.AppendText("Connected");
                 textBoxIndicator1.BackColor = Color.Green;
 
-                textBoxConStatInstrument.Text = SerialStatusTextBox.Text;
-                textBoxIndicatorInstrument.BackColor = Color.Green;
-                
-                textBoxConStatCurrent.Text = SerialStatusTextBox.Text;
-                textBoxIndicatorCurrent.BackColor = Color.Green;
-
             }
             else if (serialPort1.IsOpen == false)
             {
@@ -244,13 +264,6 @@ namespace Arbeidskrav1_OOP
                 SerialStatusTextBox.Clear();
                 SerialStatusTextBox.AppendText("Disconected");
                 textBoxIndicator1.BackColor = Color.Red;
-
-                textBoxConStatInstrument.Text = SerialStatusTextBox.Text;
-                textBoxIndicatorInstrument.BackColor = Color.Red;
-
-                textBoxConStatCurrent.Text = SerialStatusTextBox.Text;
-                textBoxIndicatorCurrent.BackColor = Color.Red;
-
             }
         }
         private string getNewSerial()
@@ -273,7 +286,7 @@ namespace Arbeidskrav1_OOP
         {
             return int.Parse(textBoxAlarmLower.Text);
         }
-        
+
         private string ValidateText(string n, float lv, float uv, int al, int au) //Denne validerer teksten slik at 
         {
             if (n.Length == 0 || n.Length < 10 || n.Length > 10)
@@ -337,24 +350,37 @@ namespace Arbeidskrav1_OOP
 
         private void LoadConfigFromFileBtn_Click_1(object sender, EventArgs e)
         {
-            if (openFileDialog1.ShowDialog() == DialogResult.OK)
-            {
-                string filename = openFileDialog1.FileName;
-                StreamReader inputfile = new StreamReader(@filename);
 
-                string text = inputfile.ReadLine();
-                string[] splitelements = text.Split(';');
-                textBoxName.Text = splitelements[0];
-                textBoxLowerValue.Text = splitelements[2];
-                textBoxUpperValue.Text = splitelements[1];
-                textBoxAlarmUpper.Text = splitelements[4];
-                textBoxAlarmLower.Text = splitelements[3];
+
+            DialogResult dborfile = MessageBox.Show("Do you wish to load config from file or database?", "", MessageBoxButtons.YesNoCancel);
+            if (dborfile == DialogResult.No)
+            {
+                if (openFileDialog1.ShowDialog() == DialogResult.OK)
+                {
+                    string filename = openFileDialog1.FileName;
+                    StreamReader inputfile = new StreamReader(@filename);
+
+                    string text = inputfile.ReadLine();
+                    string[] splitelements = text.Split(';');
+                    textBoxName.Text = splitelements[0];
+                    textBoxLowerValue.Text = splitelements[2];
+                    textBoxUpperValue.Text = splitelements[1];
+                    textBoxAlarmUpper.Text = splitelements[4];
+                    textBoxAlarmLower.Text = splitelements[3];
+                }
             }
+            if (dborfile == DialogResult.Yes)
+            {
+                Instrument_select dbtag = new Instrument_select();
+                dbtag.FormClosed += dbtag_FormClosed;
+                dbtag.ShowDialog(this);
+            }
+
         }// Laster opp sist lagrede konfigurasjon fra fil
         private void SaveToFileBtn_Click_1(object sender, EventArgs e)
         {
             string n = SerialNumberLBL.Text;
-             string uv = UpperValueLBL.Text;
+            string uv = UpperValueLBL.Text;
             string lv = LowerValueLBL.Text;
             string al = AlarmLowerLBL.Text;
             string au = AlarmUpperLBL.Text;
@@ -373,6 +399,47 @@ namespace Arbeidskrav1_OOP
                 }
             }
         } //Denne knappen lagrer current parameters til fil
+        private void dbtag_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            string curr_tag = "1";
+            SqlConnection con2 = new SqlConnection(con);
+            string sqlQuery = "SELECT Parameter_ID FROM PLACEHOLDER WHERE status = 1";
+            SqlCommand sql = new SqlCommand(sqlQuery, con2);
+            con2.Open();
+            SqlDataReader dr = sql.ExecuteReader();
+            while (dr.Read() == true)
+            {
+                sqlQuery = dr[0].ToString();
+                curr_tag = sqlQuery;
+            }
+            con2.Close();
+            string sqlQueryAr = "1";
+            string sqlQ1 = "2";
+            string sqlQ2 = "3";
+            string sqlQ3 = "4";
+
+
+            SqlConnection con1 = new SqlConnection(con);
+            sqlQueryAr = "SELECT LRV, URV, Alarm_L, Alarm_H FROM Oblig_2_OOP_Database.dbo.PARAMETER WHERE Parameter_ID LIKE (SELECT Parameter_ID FROM Oblig_2_OOP_Database.dbo.PLACEHOLDER)";
+            SqlCommand sql1 = new SqlCommand(sqlQueryAr, con1);
+            con1.Open();
+            SqlDataReader dr1 = sql1.ExecuteReader();
+            while (dr1.Read() == true)
+            {
+                sqlQueryAr = dr1[0].ToString();
+                sqlQ1 = dr1[1].ToString();
+                sqlQ2 = dr1[2].ToString();
+                sqlQ3 = dr1[3].ToString();
+            }
+            con1.Close();
+
+            textBoxName.Text = curr_tag;
+            textBoxUpperValue.Text = sqlQ1;
+            textBoxLowerValue.Text = sqlQueryAr;
+            textBoxAlarmUpper.Text = sqlQ3;
+            textBoxAlarmLower.Text = sqlQ2;
+        }
+
         private void SendBtn_Click(object sender, EventArgs e)
         {
             string n = getNewSerial();
@@ -411,7 +478,6 @@ namespace Arbeidskrav1_OOP
                 Commando.Text = "readscaled";
                 Commando.ReadOnly = true;
                 ScaledTimer.Start();
-
             }
             else
             {
@@ -461,5 +527,17 @@ namespace Arbeidskrav1_OOP
                 SaveBtn_Click(sender, e);
             }
         }
+
+        private void AboutBtn_Click(object sender, EventArgs e)
+        {
+            /*AboutBox1.cs aboutWindow = new AboutBox1.cs();
+            aboutWindow.Show(this);
+            this.Visible = false;
+            aboutWindow.FormClosed += new FormClosedEventHandler(aboutWindow_FormClosed);*/
+        }
+        void aboutWindow_FormClosed(object sender, EventArgs e)
+        {
+            this.Visible = true;
+        }
     }
-}
+    }
